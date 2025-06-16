@@ -1,0 +1,13 @@
+{
+  "dev_name": "lightning.qubit",
+  "n_qubits_qnn": 6,
+  "exp_or_prob": "exp",
+  "embedding_type": "AngleEmbedding",
+  "ansatz_type": "RealAmplitudes",
+  "feature_map_reps": 1,
+  "ansatz_reps": 1,
+  "input_channels_cnn": 6,
+  "board_size_cnn": 6,
+  "cnn_fc_out_features": 6,
+  "qnn_fc_out_features": 36
+}
