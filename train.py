@@ -51,25 +51,36 @@ class Human(Agent):
         self.eval_mode_on()
 
     def action(self, possible_moves: list) -> tuple:
-        if not possible_moves: return None
-        print(f"プレイヤー {self.player_id} の番です。選択可能な手:")
+        if not possible_moves:
+            print("選択可能な手がありません。")
+            return None
+
+        print(f"\n🎲 プレイヤー {self.player_id} の番です。選択可能な手:")
         for i, ((fr, fc), (tr, tc)) in enumerate(possible_moves):
-            piece = self.game.board.get_piece(fr,fc)
+            piece = self.game.board.get_piece(fr, fc)
             kind = self.game.get_kind_of_piece(piece) if piece != EMPTY else '?'
-            print(f"{i}: ({fr},{fc}) の {kind}オバケ を ({tr},{tc}) へ")
+            print(f" {i}: ({fr},{fc}) の {kind}オバケ → ({tr},{tc})")
+
+        print("💡 番号で手を選んでください。 q を入力すると中断できます。")
+
         while True:
             try:
-                choice_str = input(f"移動する駒の番号を選んでください (0-{len(possible_moves)-1}): ")
-                if not choice_str: continue # 空入力を無視
+                choice_str = input(f"選択 (0-{len(possible_moves)-1}, q=中断): ").strip()
+                if choice_str.lower() == 'q':
+                    print("中断が選ばれました。")
+                    return None
+                if not choice_str:
+                    print("⚠ 入力が空です。番号を入力してください。")
+                    continue
                 choice = int(choice_str)
                 if 0 <= choice < len(possible_moves):
                     return possible_moves[choice]
                 else:
-                    print(f"無効な番号です。0から{len(possible_moves)-1}の間で入力してください。")
+                    print(f"⚠ 無効な番号です。0～{len(possible_moves)-1} の間で入力してください。")
             except ValueError:
-                print("数値を入力してください。")
+                print("⚠ 数字または q を入力してください。")
             except Exception as e:
-                print(f"予期せぬエラー: {e}")
+                print(f"⚠ 予期せぬエラー: {e}")
 
 class RandomPolicy(Agent):
     def __init__(self, player_id: str, game: GeisterGame):
@@ -86,7 +97,7 @@ class RandomPolicy(Agent):
 
 class CNNAgent_Geister(Agent):
     def __init__(self, player_id:str, game:GeisterGame, network_name="CCNN2_Geister", 
-                 board_size=BOARD_SIZE, input_channels=6, elo=1500, epsilon=0.1, lr=0.001): # input_channelsを6に変更
+                 board_size=BOARD_SIZE, input_channels=6, elo=1500, epsilon=0.5, lr=0.001): # input_channelsを6に変更
         super().__init__(player_id, game)
         self.discount = 0.99
         self.epsilon_start = epsilon
@@ -150,7 +161,7 @@ class CNNAgent_Geister(Agent):
         
         # epsilon decay
         if not self.eval_mode:
-            self.epsilon = self.epsilon_end + (self.epsilon_start - self.epsilon_end) * \
+            self.epsilon = self.epsilon_end + (self.epsilon_start - self.epsilon_end) *\
                            np.exp(-1. * self.episode_count / self.epsilon_decay)
 
         if not self.eval_mode and random.random() < self.epsilon:
@@ -207,7 +218,7 @@ class CQCAgent_Geister(Agent):
                  exp_or_prob="exp", feature_map_reps=1, ansatz_reps=1,
                  input_channels_cnn=6, board_size_cnn=BOARD_SIZE, 
                  cnn_fc_out_features=4, # QNNへの入力特徴数 (n_qubits_qnnと一致させる想定)
-                 elo=1500, epsilon=0.1, lr=0.001):
+                 elo=1500, epsilon=0.8, lr=0.001):
         super().__init__(player_id, game)
         self.discount = 0.99
         self.epsilon_start = epsilon
@@ -256,14 +267,20 @@ class CQCAgent_Geister(Agent):
         return best_move, best_q_value
         
     def action(self, possible_moves: list) -> tuple:
-        # (CNNAgent_Geister と同じロジック)
         current_state_tensor = self.check_state()
+
+        # ε の減衰（エピソード数に基づく）
         if not self.eval_mode:
             self.epsilon = self.epsilon_end + (self.epsilon_start - self.epsilon_end) * \
-                           np.exp(-1. * self.episode_count / self.epsilon_decay)
+                        np.exp(-1. * self.episode_count / self.epsilon_decay)
+
+        # ε-greedy に基づくランダム行動選択
         if not self.eval_mode and random.random() < self.epsilon:
-            if not possible_moves: return None
+            if not possible_moves:
+                return None
             return random.choice(possible_moves)
+
+        # Q値に基づく最良行動選択
         else:
             best_action, _ = self._get_the_best_action_and_qvalue(current_state_tensor, possible_moves)
             return best_action
@@ -292,7 +309,7 @@ class CQCAgent_Geister(Agent):
     
 # --- 対戦環境クラス (Env_Geister) ---
 class Env_Geister:
-    def __init__(self, agent1: Agent, agent2: Agent, game: GeisterGame):
+    def __init__(self, agent1, agent2, game):
         self.game = game
         self.agent1 = agent1
         self.agent2 = agent2
@@ -300,25 +317,27 @@ class Env_Geister:
         self.agent1.game = self.game
         self.agent2.player_id = PLAYER_B_ID
         self.agent2.game = self.game
-        self.max_turns_per_game = 200
+        self.max_turns_per_game = 500
         self.loss_history_agent1 = []
         self.loss_history_agent2 = []
 
     def play_one_game_with_log(self, visualize=False, train_agents=True):
         self.game.reset_board()
+
         if train_agents:
-            self.agent1.train_mode_on(); self.agent2.train_mode_on()
-            self.agent1.episode_count +=1; self.agent2.episode_count +=1
+            self.agent1.train_mode_on()
+            self.agent2.train_mode_on()
+            self.agent1.episode_count += 1
+            self.agent2.episode_count += 1
         else:
-            self.agent1.eval_mode_on(); self.agent2.eval_mode_on()
+            self.agent1.eval_mode_on()
+            self.agent2.eval_mode_on()
 
         last_info_agent1 = {"state": None, "action": None}
         last_info_agent2 = {"state": None, "action": None}
-
-        moves_log = []  # 各ターンの記録用ログ
+        moves_log = []
 
         for turn_count in range(self.max_turns_per_game):
-            if visualize: self.game.display_board(reveal_opponent_pieces=True)
 
             current_player_id = self.game.current_player
             active_agent = self.agent1 if current_player_id == PLAYER_A_ID else self.agent2
@@ -330,13 +349,13 @@ class Env_Geister:
             if not possible_moves:
                 self.game.winner = opponent_agent.player_id
                 self.game.game_over = True
+                print(f"Game ended: {self.game.winner} wins by no moves left.")
                 break
 
             action = active_agent.action(possible_moves)
             if action is None:
                 action = random.choice(possible_moves)
 
-            # ログ記録
             moves_log.append({
                 "turn": turn_count + 1,
                 "player": current_player_id,
@@ -354,34 +373,20 @@ class Env_Geister:
             done_active = self.game.gameover()
             next_state_tensor_for_active = active_agent.check_state()
 
-            if train_agents:
-                if active_agent == self.agent1:
-                    loss = self.agent1.update(last_info_agent1["state"], last_info_agent1["action"],
-                                            reward_active, next_state_tensor_for_active, done_active)
-                    if loss is not None:
-                        self.loss_history_agent1.append(loss)
-                else:
-                    loss = self.agent2.update(last_info_agent2["state"], last_info_agent2["action"],
-                                            reward_active, next_state_tensor_for_active, done_active)
-                    if loss is not None:
-                        self.loss_history_agent2.append(loss)
-
-            if done_active:
-                break
-
-        if not self.game.game_over and turn_count >= self.max_turns_per_game -1:
+        if not self.game.game_over and turn_count >= self.max_turns_per_game - 1:
             self.game.winner = "Draw"
             self.game.game_over = True
+            print("Game ended: Draw by turn limit.")
 
-        # 最終盤面状態を取得（盤面のリスト化関数を用意する必要あり）
         final_board_state = self.game.get_board_state_as_list()
-
         return self.game.winner, moves_log, final_board_state
+
 
     def start_training(self, episodes, visualize_interval=0, train_agents=True, model_save_interval=100, model_dir_prefix="./models_geister"):
         wins_A = 0; wins_B = 0; draws = 0
         for i in range(episodes):
-            winner = self.play_one_game_with_log(visualize=(visualize_interval > 0 and (i + 1) % visualize_interval == 0), train_agents=train_agents)
+            winner_tuple = self.play_one_game_with_log(visualize=(visualize_interval > 0 and (i + 1) % visualize_interval == 0), train_agents=train_agents)
+            winner = winner_tuple[0]
             if winner == PLAYER_A_ID: wins_A += 1
             elif winner == PLAYER_B_ID: wins_B += 1
             else: draws += 1
@@ -440,7 +445,7 @@ class Env_Geister:
                     if hasattr(self.agent2, 'NN') and self.agent2.NN is not None:
                         model_path = os.path.join(model_dir_B, f"agentB_eps{i+1}.pth")
                         torch.save(self.agent2.NN.state_dict(), model_path)
-                        print(f"Agent B model saved to {model_path}")
+                        print(f"Agent B CNN model saved to {model_path}")
                     # QNN
                     if hasattr(self.agent2, 'QNN') and self.agent2.QNN is not None:
                         qmodel_path = os.path.join(model_dir_B, f"agentB_qnn_eps{i+1}.pth")
@@ -518,12 +523,25 @@ def run_geister_cqcnn_training(episodes=100, n_qbits=4, cnn_out_feat=4):
         cnn_fc_out_features=n_qbits, # QNNへの入力特徴数 (n_qubitsと一致させる)
         epsilon=0.5, lr=0.0005
     )
+    agent_b_q = CQCAgent_Geister(
+        PLAYER_B_ID, game_instance_q, dev_qnn_global,
+        embedding_type="AngleEmbedding", ansatz_type="RealAmplitudes",
+        n_qubits_qnn=n_qbits,
+        input_channels_cnn=INPUT_CHANNELS_FOR_GEISTER,
+        board_size_cnn=BOARD_SIZE,
+        cnn_fc_out_features=n_qbits, # QNNへの入力特徴数 (n_qubitsと一致させる)
+        epsilon=0.5, lr=0.0005
+    )
+
+    """
     agent_b_q = RandomPolicy(PLAYER_B_ID, game_instance_q) # 対ランダム
     save_dir = "saved_models/cqcnn"
     os.makedirs(save_dir, exist_ok=True)
+    """
+
     env_q = Env_Geister(agent_a_q, agent_b_q, game_instance_q)
     env_q.start_training(episodes, visualize_interval=0, train_agents=True, model_save_interval=20)
-
+    
     print("\n--- Evaluating Trained CQCNN Agent A vs Random ---")
     agent_a_q.eval_mode_on()
     agent_a_q.epsilon = 0.0 # 評価時はランダム性なし
@@ -586,31 +604,3 @@ class MatchRunner:
             winner, moves, board = env.play_one_game_with_log()
             results.append({"winner": winner, "moves": moves, "board": board})
         return results
-# -------------------------------------------------------------------------------
-# メイン実行ブロック
-# -------------------------------------------------------------------------------
-if __name__ == '__main__': # Jupyter Notebookではこのブロックは直接実行されないが、.py化を考慮
-    # 1. CNN Agentの学習と評価
-    run_geister_cnn_training(episodes=3000) # エピソード数を調整
-    # 2. CQCNN Agentの学習と評価 (必要であればコメントを外して実行)
-    # 注意: QNNの学習は非常に時間がかかる可能性があります。
-    #qubits_for_qnn_run = 4  # QNNで使う量子ビット数
-    #cnn_to_qnn_features_run = 4 # CNNからの特徴量をQNNの入力にする数 (上記qubitsと合わせるか、AngleEmbedding等で調整)
-    #run_geister_cqcnn_training(episodes=3000, n_qbits=qubits_for_qnn_run, cnn_out_feat = cnn_to_qnn_features_run)
-
-
-
-    # 3. 人間 vs 学習済みAI の対戦 (例)
-    # print("\n--- Human vs Trained CNN Agent ---")
-    # game_vs_human = GeisterGame()
-    # trained_cnn_path = "./models_geister_cnn_agentA/agentA_eps10000.pth" # 保存したモデルのパス
-    # if os.path.exists(trained_cnn_path):
-    #     human_player = Human(PLAYER_A_ID, game_vs_human)
-    #     ai_opponent = CNNAgent_Geister(PLAYER_B_ID, game_vs_human, input_channels=6)
-    #     ai_opponent.NN.load_state_dict(torch.load(trained_cnn_path, map_location=ai_opponent.device))
-    #     ai_opponent.eval_mode_on()
-        
-    #     env_human_vs_ai = Env_Geister(human_player, ai_opponent, game_vs_human)
-    #     env_human_vs_ai.play_one_game(visualize=True, train_agents=False)
-    # else:
-    #     print(f"Trained model not found at {trained_cnn_path}. Skipping Human vs AI game.")

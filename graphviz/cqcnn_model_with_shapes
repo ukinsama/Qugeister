@@ -1,0 +1,40 @@
+// CQ-CNN Hybrid Model
+digraph {
+	rankdir=LR
+	node [color=lightblue shape=box style=filled]
+	Input [label="Input
+(B,6,6,6)"]
+	CNN0 [label="Conv2d(6->16)
+(B,16,6,6)"]
+	Input -> CNN0
+	CNN1 [label="ReLU
+(B,16,6,6)"]
+	CNN0 -> CNN1
+	CNN2 [label="Conv2d(16->32)
+(B,32,6,6)"]
+	CNN1 -> CNN2
+	CNN3 [label="ReLU
+(B,32,6,6)"]
+	CNN2 -> CNN3
+	CNN4 [label="Flatten
+(B,flat_dim)"]
+	CNN3 -> CNN4
+	CNN5 [label="Linear(flat_dim->qnn_in)
+(B,qnn_in)"]
+	CNN4 -> CNN5
+	CNN_out [label="Flatten+Linear
+(B, qnn_in)"]
+	CNN5 -> CNN_out
+	QNN0 [label="AngleEmbedding
+(B,n_qubits)"]
+	CNN_out -> QNN0
+	QNN1 [label="RealAmplitudes
+(B,n_qubits)"]
+	QNN0 -> QNN1
+	QNN2 [label="Expval
+(B,qnn_out_dim)"]
+	QNN1 -> QNN2
+	Output [label="Linear to Q-map
+(B,6,6)"]
+	QNN2 -> Output
+}

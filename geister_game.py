@@ -236,17 +236,35 @@ class GeisterGame:
         elif stats_b["escaped_good"] >= 1: self.game_over = True; self.winner = PLAYER_B_ID
 
     def checkwinner_for_reward(self, player_id):
-        """
-        Returns +1 if player_id wins, -1 if loses, 0 for draw or ongoing.
-        """
-        if not self.game_over:
-            return 0.0
-        if self.winner == player_id:
-            return 1.0
-        elif self.winner == "Draw":
-            return 0.0
-        else:
-            return -1.0
+        reward = 0.0
+        opponent_id = PLAYER_B_ID if player_id == PLAYER_A_ID else PLAYER_A_ID
+
+        # 良駒悪駒の捕獲報酬
+        good_diff = self.player_stats[player_id]["captured_good"] - self.player_stats[opponent_id]["captured_good"]
+        bad_diff = self.player_stats[player_id]["captured_bad"] - self.player_stats[opponent_id]["captured_bad"]
+        reward += 0.1 * good_diff
+        reward -= 0.05 * bad_diff
+
+        # 赤駒の出口への接近
+        good_positions = [(pos, piece) for pos, piece in self.board.get_all_piece_positions(player_id) if self.get_kind_of_piece(piece) == GOOD_GHOST]
+        if good_positions:
+            my_exits = PLAYER_A_EXITS if player_id == PLAYER_A_ID else PLAYER_B_EXITS
+            min_distance = min(
+                min(abs(pos[0] - ex[0]) + abs(pos[1] - ex[1]) for ex in my_exits)
+                for pos, _ in good_positions
+            )
+            reward += 0.1 * (BOARD_SIZE - min_distance) / BOARD_SIZE
+
+        # 勝敗報酬
+        if self.game_over:
+            if self.winner == player_id:
+                reward += 5.0
+            elif self.winner == "Draw":
+                reward += 0.0
+            else:
+                reward -= 5.0
+
+        return reward
         
     def gameover(self): # For OX game's Env compatibility
         return self.game_over
