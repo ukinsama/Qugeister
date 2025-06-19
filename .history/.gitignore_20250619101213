@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+
+# Jupyter ノートブックのチェックポイント
+.ipynb_checkpoints/
+
+/models
+# 仮想環境
+.venv/
+venv/
+env/
+ENV/
+
+# モデルファイル・学習データ
+*.h5
+*.hdf5
+*.ckpt
+*.pth
+*.pt
+*.pb
+*.onnx
+*.joblib
+*.pkl
+*.sav
+*.npz
+
+# ログ・出力・一時ファイル
+*.log
+*.out
+*.tmp
+
+# データセット（必要に応じて）
+*.csv
+*.tsv
+*.zip
+*.tar.gz
+*.7z
+
+# OS・IDE 固有
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# その他
+*.bak
+*.old
