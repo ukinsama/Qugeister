@@ -26,4 +26,8 @@ digraph {
 	}
 	Output [label=Output color=lightgray shape=oval style=filled]
 	QNN2 -> Output
+	fontcolor=black fontsize=20 label="CQ-CNN Hybrid Model"
+	labeljust=c labelloc=t
+	node [color=lightyellow shape=box style=filled]
+	edge [color=black]
 }
