@@ -1,32 +1,24 @@
-// CQ-CNN Hybrid Model
+// C-QNN Hybrid Model
 digraph {
 	rankdir=LR
-	Input [label=Input color=lightgray shape=oval style=filled]
 	subgraph cluster_cnn {
 		color=lightblue label=CNN style=filled
-		CNN0 [label=Conv2d]
+		Input [label=Input color=lightgray shape=oval style=filled]
+		CNN0 [label="CNN layers"]
 		Input -> CNN0
-		CNN1 [label=ReLU]
-		CNN0 -> CNN1
-		CNN2 [label=Linear]
-		CNN1 -> CNN2
 		CNN_out [label="CNN Output"]
-		CNN2 -> CNN_out
+		CNN0 -> CNN_out
 	}
 	subgraph cluster_qnn {
 		color=lightpink label=QNN style=filled
 		QNN_input [label="QNN Input"]
-		CNN_out -> QNN_input
-		QNN0 [label=AngleEmbedding]
+		QNN0 [label="QNN layers"]
 		QNN_input -> QNN0
-		QNN1 [label=RealAmplitudes]
-		QNN0 -> QNN1
-		QNN2 [label=Expval]
-		QNN1 -> QNN2
 	}
 	Output [label=Output color=lightgray shape=oval style=filled]
-	QNN2 -> Output
-	fontcolor=black fontsize=20 label="CQ-CNN Hybrid Model"
+	QNN0 -> Output
+	CNN_out -> QNN_input [constraint=True]
+	fontcolor=black fontsize=20 label="C-QNN Hybrid Model"
 	labeljust=c labelloc=t
 	node [color=lightyellow shape=box style=filled]
 	edge [color=black]

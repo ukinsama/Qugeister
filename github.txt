@@ -1,0 +1,12 @@
+# 1. GitHubから最新を取得（これが重要）
+git pull origin main
+
+# 2. ローカルで作業（編集・追加）
+# 3. ステージング
+git add .
+
+# 4. コミット
+git commit -m "変更内容を記述"
+
+# 5. プッシュ
+git push origin main
