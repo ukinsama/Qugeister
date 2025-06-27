@@ -149,6 +149,7 @@ class CCNN2_Geister(nn.Module):
         if num_outputs is None:
             num_outputs = board_size * board_size
         super().__init__()
+        self.input_channels = input_channels
         self.board_size = board_size
         self.conv1 = nn.Conv2d(self.input_channels, 32, kernel_size=3, padding=1)
         self.relu1 = nn.ReLU()
@@ -186,19 +187,31 @@ class CNN_QNN_CNN_Geister(nn.Module):
                  input_channels_cnn=6, 
                  board_size_cnn=6, 
                  cnn_fc_out_features=4,  # CNNからQNNに送る特徴数 = QNN入力数
-                 qnn_fc_out_features=36):  # Q値出力 = 6x6マス
+                 qnn_fc_out_features=None):  # Q値出力 = board_size^2 に対応
+
         super().__init__()
         self.dev = dev
         self.embedding_type = embedding_type
         self.ansatz_type = ansatz_type
-        self.n_qubits = n_qubits_qnn  # ✅ ←ここを追加
+        self.n_qubits = n_qubits_qnn
         self.exp_or_prob = exp_or_prob
         self.feature_map_reps = feature_map_reps
-        self.input_channels_cnn = input_channels_cnn
         self.ansatz_reps = ansatz_reps
+        self.input_channels_cnn = input_channels_cnn
         self.board_size_cnn = board_size_cnn
-        self.cnn_fc_out_features = cnn_fc_out_features  # ✅ ←ここを追加
+        self.cnn_fc_out_features = cnn_fc_out_features
+
+        # QNN出力次元
+        self.qnn_output_dim = self.n_qubits if self.exp_or_prob == "exp" else 2 ** self.n_qubits
+
+        # QNNの全結合出力層の出力数（Noneなら board_size^2 にする）
+        if qnn_fc_out_features is None:
+            qnn_fc_out_features = board_size_cnn * board_size_cnn
         self.qnn_fc_out_features = qnn_fc_out_features
+
+        # QNN出力 → 盤面Q値に変換
+        self.fc_from_qnn = nn.Linear(self.qnn_output_dim, self.qnn_fc_out_features)
+
         # CNN部分
         self.cnn_feature_extractor = nn.Sequential(
             nn.Conv2d(input_channels_cnn, 16, kernel_size=3, padding=1), 
@@ -237,8 +250,7 @@ class CNN_QNN_CNN_Geister(nn.Module):
             )
 
         self.qnode = qnode  # メンバに保存
-        self.qnn_output_dim = self.n_qubits if self.exp_or_prob == "exp" else 2**self.n_qubits
-        self.fc_from_qnn = nn.Linear(self.qnn_output_dim, qnn_fc_out_features)
+
 
     def forward(self, state):
         cnn_features = self.cnn_feature_extractor(state)  # shape: (B, N)

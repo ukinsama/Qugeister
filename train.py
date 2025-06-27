@@ -48,7 +48,10 @@ class Human(Agent):
         print(f"\n🎲 プレイヤー {self.player_id} の番です。選択可能な手:")
         for i, ((fr, fc), (tr, tc)) in enumerate(possible_moves):
             piece = self.game.board.get_piece(fr, fc)
-            kind = self.game.get_kind_of_piece(piece) if piece != EMPTY else '?'
+        if piece == self.game.EMPTY:
+            kind = '?'
+        else:
+            kind = self.game.get_kind_of_piece(piece)
             print(f" {i}: ({fr},{fc}) の {kind}オバケ → ({tr},{tc})")
 
         print("💡 番号で手を選んでください。 q を入力すると中断できます。")
@@ -211,8 +214,8 @@ class CQCAgent_Geister(Agent):
                  input_channels_cnn=6, board_size_cnn=None, 
                  cnn_fc_out_features=4, # QNNへの入力特徴数 (n_qubits_qnnと一致させる想定)
                  elo=1500, epsilon=0.8, lr=0.001):
-        if board_size is None:
-            board_size = game.board_size
+        if board_size_cnn is None:
+            board_size_cnn = game.board_size
         super().__init__(player_id, game)
         self.discount = 0.99
         self.epsilon_start = epsilon
@@ -307,16 +310,23 @@ class Env_Geister:
         self.game = game
         self.agent1 = agent1
         self.agent2 = agent2
-        self.agent1.player_id = PLAYER_A_ID
+
+        self.PLAYER_A_ID = self.game.PLAYER_A_ID
+        self.PLAYER_B_ID = self.game.PLAYER_B_ID
+
+        self.agent1.player_id = self.PLAYER_A_ID
         self.agent1.game = self.game
-        self.agent2.player_id = PLAYER_B_ID
+        self.agent2.player_id = self.PLAYER_B_ID
         self.agent2.game = self.game
+
         self.max_turns_per_game = 500
         self.loss_history_agent1 = []
         self.loss_history_agent2 = []
 
     def play_one_game_with_log(self, visualize=False, train_agents=True):
         self.game.reset_board()
+        game_instance = GeisterGame()
+        PLAYER_A_ID = game_instance.PLAYER_A_ID
 
         if train_agents:
             self.agent1.train_mode_on()
@@ -378,6 +388,10 @@ class Env_Geister:
 
     def start_training(self, episodes, visualize_interval=0, train_agents=True, model_save_interval=100, model_dir_prefix="./models_geister"):
         wins_A = 0; wins_B = 0; draws = 0
+        game_instance = GeisterGame()
+        PLAYER_A_ID = game_instance.PLAYER_A_ID
+        PLAYER_B_ID = game_instance.PLAYER_B_ID
+        INPUT_CHANNELS_FOR_GEISTER = 6
         for i in range(episodes):
             winner_tuple = self.play_one_game_with_log(visualize=(visualize_interval > 0 and (i + 1) % visualize_interval == 0), train_agents=train_agents)
             winner = winner_tuple[0]
@@ -463,7 +477,9 @@ def run_geister_cnn_training(episodes=1000):
     game_instance = GeisterGame()
     # 状態表現のチャネル数 (GeisterGame.get_state の出力に合わせる)
     # 例: 自良(1),自悪(1),敵駒(1),自駒位置(1),自脱出口(1),敵脱出口(1) -> 6チャネル
-    INPUT_CHANNELS_FOR_GEISTER = 6 
+    PLAYER_A_ID = game_instance.PLAYER_A_ID
+    PLAYER_B_ID = game_instance.PLAYER_B_ID
+    INPUT_CHANNELS_FOR_GEISTER = 6
 
     agent_a = CNNAgent_Geister(PLAYER_A_ID, game_instance, input_channels=INPUT_CHANNELS_FOR_GEISTER, epsilon=0.5, lr=0.0005)
     agent_b = CNNAgent_Geister(PLAYER_B_ID, game_instance, input_channels=INPUT_CHANNELS_FOR_GEISTER, epsilon=0.5, lr=0.0005) # 自己対戦
@@ -493,15 +509,14 @@ def run_geister_cnn_training(episodes=1000):
     eval_env_B_vs_Random.start_training(episodes=100, visualize_interval=0, train_agents=False)
 
 # --- CQCAgent の学習・評価関数 (注意：dev_qnn_global の初期化が必要) ---
-def run_geister_cqcnn_training(episodes=100, n_qbits=4, cnn_out_feat=4):
+def run_geister_cqcnn_training(episodes=100, n_qbits=4, cnn_out_feat=4, game_instance=None):
     print(f"--- Training CQCNN Agent (Qubits: {n_qbits}, CNN->QNN Feat: {cnn_out_feat}) ---")
     global dev_qnn_global # グローバルデバイスを使う
     if dev_qnn_global is None or len(dev_qnn_global.wires) != n_qbits:
         dev_qnn_global = qml.device("lightning.qubit", wires=n_qbits)
         print(f"Initialized QNN device: {dev_qnn_global.name} with {n_qbits} qubits.")
-
-
-    game_instance = GeisterGame()
+    if game_instance is None:
+        game_instance = GeisterGame()
     player_a_id = game_instance.PLAYER_A_ID
     player_b_id = game_instance.PLAYER_B_ID
     bordsize = game_instance.board_size
