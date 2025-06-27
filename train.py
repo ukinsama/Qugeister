@@ -11,6 +11,7 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 import pennylane as qml
+from agent_factory import save_agent
 dev_qnn_global = None # グローバル変数として量子デバイスを保持
 # --- エージェントクラス (Agent, Human, RandomPolicy, CNNAgent_Geister, CQCAgent_Geister) ---
 class Agent(abc.ABC):
@@ -410,61 +411,9 @@ class Env_Geister:
                 print(f"Agent B Epsilon: {self.agent2.epsilon if hasattr(self.agent2, 'epsilon') else 'N/A'}")
 
             if train_agents and model_save_interval > 0 and (i + 1) % model_save_interval == 0:
-                # ----- Agent A -----
-                model_dir_A = f"{model_dir_prefix}_agentA/"
-                os.makedirs(model_dir_A, exist_ok=True)
-                #CNN
-                if hasattr(self.agent1, 'NN') and self.agent1.NN is not None:
-                    model_path = os.path.join(model_dir_A, f"agentA_eps{i+1}.pth")
-                    torch.save(self.agent1.NN.state_dict(), model_path)
-                    print(f"Agent A CNN model saved to {model_path}")
-                # QNN
-                if hasattr(self.agent1, 'QNN') and self.agent1.QNN is not None:
-                    qmodel_path = os.path.join(model_dir_A, f"agentA_qnn_eps{i+1}.pth")
-                    torch.save(self.agent1.QNN.state_dict(), qmodel_path)
-                    print(f"Agent A QNN saved to {qmodel_path}")
-                # CQCNN
-                if hasattr(self.agent1, 'HNN') and self.agent1.HNN is not None:
-                    hnn_path = os.path.join(model_dir_A, f"agentA_cqcnn_eps{i+1}.pth")
-                    torch.save(self.agent1.HNN.state_dict(), hnn_path)
-                    print(f"Agent A CQCNN model saved to {hnn_path}")
-                    config_path = os.path.join(model_dir_A, f"agentA_cqcnn_config.json")
-                    config = {
-                        "dev_name": self.agent1.HNN.dev.name,
-                        "n_qubits_qnn": self.agent1.HNN.n_qubits,
-                        "exp_or_prob": self.agent1.HNN.exp_or_prob,
-                        "embedding_type": self.agent1.HNN.embedding_type,
-                        "ansatz_type": self.agent1.HNN.ansatz_type,
-                        "feature_map_reps": self.agent1.HNN.feature_map_reps,
-                        "ansatz_reps": self.agent1.HNN.ansatz_reps,
-                        "input_channels_cnn": self.agent1.HNN.input_channels_cnn,
-                        "board_size_cnn": self.agent1.HNN.board_size_cnn,
-                        "cnn_fc_out_features": self.agent1.HNN.cnn_fc_out_features,
-                        "qnn_fc_out_features": self.agent1.HNN.qnn_fc_out_features
-                    }
-                    with open(config_path, "w") as f:
-                        json.dump(config, f, indent=2)
-
-                # ----- Agent B -----
+                save_agent(self.agent1, f"{model_dir_prefix}_agentA/eps{i+1}", model_type="CQCNN")
                 if self.agent2 != self.agent1:
-                    model_dir_B = f"{model_dir_prefix}_agentB/"
-                    os.makedirs(model_dir_B, exist_ok=True)
-                    #CNN
-                    if hasattr(self.agent2, 'NN') and self.agent2.NN is not None:
-                        model_path = os.path.join(model_dir_B, f"agentB_eps{i+1}.pth")
-                        torch.save(self.agent2.NN.state_dict(), model_path)
-                        print(f"Agent B CNN model saved to {model_path}")
-                    # QNN
-                    if hasattr(self.agent2, 'QNN') and self.agent2.QNN is not None:
-                        qmodel_path = os.path.join(model_dir_B, f"agentB_qnn_eps{i+1}.pth")
-                        torch.save(self.agent2.QNN.state_dict(), qmodel_path)
-                        print(f"Agent B QNN saved to {qmodel_path}")
-                    # CQCNN
-                    if hasattr(self.agent2, 'HNN') and self.agent2.HNN is not None:
-                        hnn_path = os.path.join(model_dir_B, f"agentB_cqcnn_eps{i+1}.pth")
-                        torch.save(self.agent2.HNN.state_dict(), hnn_path)
-                        print(f"Agent B CQCNN model saved to {hnn_path}")
-                            # ✅ 構成情報の保存
+                    save_agent(self.agent2, f"{model_dir_prefix}_agentB/eps{i+1}", model_type="CQCNN")
 
         print("Training finished.")
         final_total = wins_A + wins_B + draws
@@ -472,7 +421,7 @@ class Env_Geister:
             print(f"Final Score: A Wins: {wins_A} ({wins_A/final_total:.2%}), B Wins: {wins_B} ({wins_B/final_total:.2%}), Draws: {draws} ({draws/final_total:.2%})")
 
 # --- 学習・評価関数の定義 (簡略化) ---
-def run_geister_cnn_training(episodes=1000):
+def run_geister_cnn_training(episodes=100):
     print("--- Training CNN Agent for Geister ---")
     game_instance = GeisterGame()
     # 状態表現のチャネル数 (GeisterGame.get_state の出力に合わせる)
