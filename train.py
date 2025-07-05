@@ -11,7 +11,7 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 import pennylane as qml
-from agent_factory import save_agent
+from agent_factory import save_agent, save_agent_2
 dev_qnn_global = None # グローバル変数として量子デバイスを保持
 # --- エージェントクラス (Agent, Human, RandomPolicy, CNNAgent_Geister, CQCAgent_Geister) ---
 class Agent(abc.ABC):
@@ -509,6 +509,187 @@ def run_geister_cqcnn_training(episodes=100, n_qbits=4, cnn_out_feat=4, game_ins
     agent_a_q.epsilon = 0.0 # 評価時はランダム性なし
     eval_env_Q_vs_Random = Env_Geister(agent_a_q, RandomPolicy(player_b_id, game_instance), game_instance)
     eval_env_Q_vs_Random.start_training(episodes=100, visualize_interval=0, train_agents=False)
+
+def start_training_until_epsilon(agent1, agent2, game, epsilon_threshold=0.01, max_episodes=10000):
+    env = Env_Geister(agent1, agent2, game)
+    episode = 0
+
+    while episode < max_episodes:
+        winner, _, _ = env.play_one_game_with_log(train_agents=True)
+        episode += 1
+
+        # agent1/agent2がともにCQCAgentまたはCNNAgentの場合
+        epsilon_a = getattr(agent1, 'epsilon', 1.0)
+        epsilon_b = getattr(agent2, 'epsilon', 1.0)
+
+        if epsilon_a <= epsilon_threshold and epsilon_b <= epsilon_threshold:
+            print(f"🎯 εが閾値 {epsilon_threshold} に到達したため、{episode}エピソードで停止。")
+            break
+
+        if episode % 100 == 0:
+            print(f"[Episode {episode}] epsilon_A = {epsilon_a:.4f}, epsilon_B = {epsilon_b:.4f}")
+
+    print(f"✅ 学習完了: Final epsilons: A={epsilon_a:.4f}, B={epsilon_b:.4f}")
+
+def run_geister_cqcnn_training_until_epsilon_2(
+    epsilon_threshold=0.05,
+    n_qbits=4,
+    cnn_out_feat=4,
+    game_instance=None,
+    model_save_dir="./trained_models/cqcnn_until_epsilon",
+    name_agent1="CQCNN_A",
+    name_agent2="CQCNN_B",
+    embedding_type="AngleEmbedding",   # ✅ ← これを追加
+    ansatz_type="RealAmplitudes",       # ✅ ← これも追加
+    max_episodes=10000
+):
+    print(f"--- Training CQCNN Agent until epsilon ≤ {epsilon_threshold} ---")
+
+    global dev_qnn_global
+    if dev_qnn_global is None or len(dev_qnn_global.wires) != n_qbits:
+        dev_qnn_global = qml.device("lightning.qubit", wires=n_qbits)
+        print(f"Initialized QNN device: {dev_qnn_global.name} with {n_qbits} qubits.")
+
+    if game_instance is None:
+        game_instance = GeisterGame()
+
+    player_a_id = game_instance.PLAYER_A_ID
+    player_b_id = game_instance.PLAYER_B_ID
+    board_size = game_instance.board_size
+    input_channels = 6
+
+    agent_a = CQCAgent_Geister(
+        player_a_id, game_instance, dev_qnn_global,
+        embedding_type=embedding_type,
+        ansatz_type=ansatz_type,
+        n_qubits_qnn=n_qbits,
+        input_channels_cnn=input_channels,
+        board_size_cnn=board_size,
+        cnn_fc_out_features=cnn_out_feat,
+        epsilon=0.5, lr=0.0005
+    )
+
+    agent_b = CQCAgent_Geister(
+        player_b_id, game_instance, dev_qnn_global,
+        embedding_type=embedding_type,
+        ansatz_type=ansatz_type,
+        n_qubits_qnn=n_qbits,
+        input_channels_cnn=input_channels,
+        board_size_cnn=board_size,
+        cnn_fc_out_features=cnn_out_feat,
+        epsilon=0.5, lr=0.0005
+    )
+
+    # 繰り返し学習
+    env = Env_Geister(agent_a, agent_b, game_instance)
+    os.makedirs(model_save_dir, exist_ok=True)
+
+    episode = 0
+    while episode < max_episodes:
+        winner, _, _ = env.play_one_game_with_log(train_agents=True)
+        episode += 1
+
+        eps_a = agent_a.epsilon
+        eps_b = agent_b.epsilon
+
+        if episode % 100 == 0:
+            print(f"[Episode {episode}] epsilon A: {eps_a:.4f}, epsilon B: {eps_b:.4f}")
+            save_agent_2(agent_a, model_save_dir, "CQCNN", name=f"{name_agent1}_ep{episode}")
+            save_agent_2(agent_b, model_save_dir, "CQCNN", name=f"{name_agent2}_ep{episode}")
+
+        if eps_a <= epsilon_threshold and eps_b <= epsilon_threshold:
+            print(f"🎯 epsilon ≤ {epsilon_threshold} に到達。{episode}エピソードで停止。")
+            break
+
+    # 最終保存
+    save_agent_2(agent_a, model_save_dir, "CQCNN", name=f"{name_agent1}_final")
+    save_agent_2(agent_b, model_save_dir, "CQCNN", name=f"{name_agent2}_final")
+
+    # 評価モード
+    print("\n--- Evaluating Trained Agent A vs Random ---")
+    agent_a.eval_mode_on()
+    agent_a.epsilon = 0.0
+    eval_env = Env_Geister(agent_a, RandomPolicy(player_b_id, game_instance), game_instance)
+    eval_env.start_training(episodes=100, train_agents=False)
+
+def run_geister_cqcnn_training_until_epsilon(
+    epsilon_threshold=0.05,
+    n_qbits=4,
+    cnn_out_feat=4,
+    game_instance=None,
+    model_save_dir="./trained_models/cqcnn_until_epsilon",
+    name_agent1="CQCNN_A",
+    name_agent2="CQCNN_B",
+    max_episodes=10000
+):
+    print(f"--- Training CQCNN Agent until epsilon ≤ {epsilon_threshold} ---")
+
+    global dev_qnn_global
+    if dev_qnn_global is None or len(dev_qnn_global.wires) != n_qbits:
+        dev_qnn_global = qml.device("lightning.qubit", wires=n_qbits)
+        print(f"Initialized QNN device: {dev_qnn_global.name} with {n_qbits} qubits.")
+
+    if game_instance is None:
+        game_instance = GeisterGame()
+
+    player_a_id = game_instance.PLAYER_A_ID
+    player_b_id = game_instance.PLAYER_B_ID
+    board_size = game_instance.board_size
+    input_channels = 6
+
+    agent_a = CQCAgent_Geister(
+        player_a_id, game_instance, dev_qnn_global,
+        embedding_type="AngleEmbedding",
+        ansatz_type="RealAmplitudes",
+        n_qubits_qnn=n_qbits,
+        input_channels_cnn=input_channels,
+        board_size_cnn=board_size,
+        cnn_fc_out_features=cnn_out_feat,
+        epsilon=0.5, lr=0.0005
+    )
+
+    agent_b = CQCAgent_Geister(
+        player_b_id, game_instance, dev_qnn_global,
+        embedding_type="AngleEmbedding",
+        ansatz_type="RealAmplitudes",
+        n_qubits_qnn=n_qbits,
+        input_channels_cnn=input_channels,
+        board_size_cnn=board_size,
+        cnn_fc_out_features=cnn_out_feat,
+        epsilon=0.5, lr=0.0005
+    )
+
+    # 繰り返し学習
+    env = Env_Geister(agent_a, agent_b, game_instance)
+    os.makedirs(model_save_dir, exist_ok=True)
+
+    episode = 0
+    while episode < max_episodes:
+        winner, _, _ = env.play_one_game_with_log(train_agents=True)
+        episode += 1
+
+        eps_a = agent_a.epsilon
+        eps_b = agent_b.epsilon
+
+        if episode % 100 == 0:
+            print(f"[Episode {episode}] epsilon A: {eps_a:.4f}, epsilon B: {eps_b:.4f}")
+            save_agent_2(agent_a, model_save_dir, "CQCNN", name=f"{name_agent1}_ep{episode}")
+            save_agent_2(agent_b, model_save_dir, "CQCNN", name=f"{name_agent2}_ep{episode}")
+
+        if eps_a <= epsilon_threshold and eps_b <= epsilon_threshold:
+            print(f"🎯 epsilon ≤ {epsilon_threshold} に到達。{episode}エピソードで停止。")
+            break
+
+    # 最終保存
+    save_agent_2(agent_a, model_save_dir, "CQCNN", name=f"{name_agent1}_final")
+    save_agent_2(agent_b, model_save_dir, "CQCNN", name=f"{name_agent2}_final")
+
+    # 評価モード
+    print("\n--- Evaluating Trained Agent A vs Random ---")
+    agent_a.eval_mode_on()
+    agent_a.epsilon = 0.0
+    eval_env = Env_Geister(agent_a, RandomPolicy(player_b_id, game_instance), game_instance)
+    eval_env.start_training(episodes=100, train_agents=False)
 
 class AgentFactory:
     @staticmethod

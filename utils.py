@@ -134,17 +134,19 @@ def visualize_cqcnn_structure_with_clusters(cnn_layers=None, qnn_layers=None, ti
 
     return dot
 
-def save_agent(agent, dir_path: str, model_type: str = "CQCNN"):
+def save_agent_2(agent, dir_path: str, model_type: str = "CQCNN", name: str = "agent"):
+
     os.makedirs(dir_path, exist_ok=True)
-    
+
     if model_type == "CQCNN":
         model = agent.HNN
     elif model_type == "CNN":
         model = agent.NN
     else:
         raise ValueError(f"Unknown model_type: {model_type}")
-    
-    torch.save(model.state_dict(), os.path.join(dir_path, "weights.pth"))
+
+    torch.save(model.state_dict(), os.path.join(dir_path, f"{name}_weights.pth"))
+    print(f"💾 Saved weights: {name}_weights.pth")
 
     if model_type == "CQCNN":
         config = {
@@ -160,5 +162,6 @@ def save_agent(agent, dir_path: str, model_type: str = "CQCNN"):
             "cnn_fc_out_features": model.cnn_fc_out_features,
             "qnn_fc_out_features": model.qnn_fc_out_features
         }
-        with open(os.path.join(dir_path, "config.json"), "w") as f:
+        with open(os.path.join(dir_path, f"{name}_config.json"), "w") as f:
             json.dump(config, f, indent=2)
+        print(f"📝 Saved config: {name}_config.json")
