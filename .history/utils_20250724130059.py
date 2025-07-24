@@ -33,6 +33,7 @@ def set_seed(seed=42):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)  # GPUがある場合
+    qml.qnode(interface="torch")
 
 def get_device():
     """

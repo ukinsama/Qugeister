@@ -33,7 +33,7 @@ def set_seed(seed=42):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)  # GPUがある場合
-
+    
 def get_device():
     """
     デバイスを取得する関数。

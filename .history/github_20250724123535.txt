@@ -1,4 +1,4 @@
-# 1. GitHubから最新を取得
+# 1. GitHubから最新を取得（これが重要）
 git pull origin main
 
 # 2. ローカルで作業（編集・追加）
