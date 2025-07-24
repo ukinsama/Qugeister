@@ -76,7 +76,7 @@ def load_cqc_agent(config_path, weight_path, game, player_id="A", AgentClass=Non
     model.eval()
 
     if AgentClass is None:
-        from old_train import CQCAgent_Geister
+        from train import CQCAgent_Geister
         AgentClass = CQCAgent_Geister
 
     agent = AgentClass(

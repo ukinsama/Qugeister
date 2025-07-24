@@ -214,14 +214,14 @@ class CQCAgent_Geister(Agent):
                  exp_or_prob="exp", feature_map_reps=1, ansatz_reps=1,
                  input_channels_cnn=6, board_size_cnn=None, 
                  cnn_fc_out_features=4, # QNNへの入力特徴数 (n_qubits_qnnと一致させる想定)
-                 elo=1500, epsilon=0.5, lr=0.001):
+                 elo=1500, epsilon=0.8, lr=0.001):
         if board_size_cnn is None:
             board_size_cnn = game.board_size
         super().__init__(player_id, game)
         self.discount = 0.99
         self.epsilon_start = epsilon
         self.epsilon_end = 0.01
-        self.epsilon_decay = 1000
+        self.epsilon_decay = 5000
         self.epsilon = epsilon
         self.lr = lr
         self.board_size = board_size_cnn
@@ -388,7 +388,6 @@ class Env_Geister:
 
 
     def start_training(self, episodes, visualize_interval=0, train_agents=True, model_save_interval=100, model_dir_prefix="./models_geister"):
-        self.episode_log = []  # 学習ログ（エピソードごとの結果を格納）
         wins_A = 0; wins_B = 0; draws = 0
         game_instance = GeisterGame()
         PLAYER_A_ID = game_instance.PLAYER_A_ID
@@ -400,15 +399,6 @@ class Env_Geister:
             if winner == PLAYER_A_ID: wins_A += 1
             elif winner == PLAYER_B_ID: wins_B += 1
             else: draws += 1
-
-            self.episode_log.append({
-                "episode": i + 1,
-                "wins_A": wins_A,
-                "wins_B": wins_B,
-                "draws": draws,
-                "epsilon_A": getattr(self.agent1, "epsilon", None),
-                "epsilon_B": getattr(self.agent2, "epsilon", None),
-            })
 
             if (i + 1) % 100 == 0:
                 total_played = wins_A + wins_B + draws
@@ -426,7 +416,6 @@ class Env_Geister:
                     save_agent(self.agent2, f"{model_dir_prefix}_agentB/eps{i+1}", model_type="CQCNN")
 
         print("Training finished.")
-        return self.episode_log
         final_total = wins_A + wins_B + draws
         if final_total > 0:
             print(f"Final Score: A Wins: {wins_A} ({wins_A/final_total:.2%}), B Wins: {wins_B} ({wins_B/final_total:.2%}), Draws: {draws} ({draws/final_total:.2%})")
@@ -513,72 +502,13 @@ def run_geister_cqcnn_training(episodes=100, n_qbits=4, cnn_out_feat=4, game_ins
     """
 
     env_q = Env_Geister(agent_a_q, agent_b_q, game_instance)
-    log = env_q.start_training(episodes, visualize_interval=0, train_agents=True, model_save_interval=20)
+    env_q.start_training(episodes, visualize_interval=0, train_agents=True, model_save_interval=20)
     
     print("\n--- Evaluating Trained CQCNN Agent A vs Random ---")
-    return log
     agent_a_q.eval_mode_on()
     agent_a_q.epsilon = 0.0 # 評価時はランダム性なし
     eval_env_Q_vs_Random = Env_Geister(agent_a_q, RandomPolicy(player_b_id, game_instance), game_instance)
     eval_env_Q_vs_Random.start_training(episodes=100, visualize_interval=0, train_agents=False)
-
-def run_geister_cqcnn_training_switch(episodes=100, n_qbits=4, cnn_out_feat=4, game_instance=None, switch_episode=500):
-    print(f"--- Training CQCNN Agent (Qubits: {n_qbits}, CNN→QNN Feat: {cnn_out_feat}) ---")
-    global dev_qnn_global
-    if dev_qnn_global is None or len(dev_qnn_global.wires) != n_qbits:
-        dev_qnn_global = qml.device("lightning.qubit", wires=n_qbits)
-        print(f"Initialized QNN device: {dev_qnn_global.name} with {n_qbits} qubits.")
-
-    if game_instance is None:
-        game_instance = GeisterGame()
-
-    player_a_id = game_instance.PLAYER_A_ID
-    player_b_id = game_instance.PLAYER_B_ID
-    board_size = game_instance.board_size
-    input_channels = 6
-
-    agent_a_q = CQCAgent_Geister(
-        player_a_id, game_instance, dev_qnn_global,
-        embedding_type="AngleEmbedding", ansatz_type="RealAmplitudes",
-        n_qubits_qnn=n_qbits,
-        input_channels_cnn=input_channels,
-        board_size_cnn=board_size,
-        cnn_fc_out_features=n_qbits,
-        epsilon=0.5, lr=0.0005
-    )
-
-    agent_b_q = RandomPolicy(player_b_id, game_instance)  # 初期はランダム
-
-    env = Env_Geister(agent_a_q, agent_b_q, game_instance)
-    print(f"👣 0～{switch_episode}まではランダム方策と対戦、それ以降は自己対戦に切り替え")
-
-    for ep in range(episodes):
-        # スイッチタイミングで自己対戦へ切り替え
-        if ep == switch_episode:
-            agent_b_q = CQCAgent_Geister(
-                player_b_id, game_instance, dev_qnn_global,
-                embedding_type="AngleEmbedding", ansatz_type="RealAmplitudes",
-                n_qubits_qnn=n_qbits,
-                input_channels_cnn=input_channels,
-                board_size_cnn=board_size,
-                cnn_fc_out_features=n_qbits,
-                epsilon=0.5, lr=0.0005
-            )
-            env = Env_Geister(agent_a_q, agent_b_q, game_instance)
-            print(f"🔁 エピソード{ep}で自己対戦に切り替えました")
-
-        winner, _, _ = env.play_one_game_with_log(train_agents=True)
-
-        if (ep + 1) % 100 == 0:
-            print(f"[Episode {ep + 1}] ε: {agent_a_q.epsilon:.4f}")
-
-    # 評価
-    print("\n--- Evaluating Trained CQCNN Agent A vs Random ---")
-    return log
-    agent_a_q.eval_mode_on()
-    agent_a_q.epsilon = 0.0
-    eval_env = Env_Geister(agent_a_q, RandomPolicy(player_b_id, game_instance), game_instance)
-    eval_env.start_training(episodes=100, train_agents=False)
 
 def start_training_until_epsilon(agent1, agent2, game, epsilon_threshold=0.01, max_episodes=10000):
     env = Env_Geister(agent1, agent2, game)

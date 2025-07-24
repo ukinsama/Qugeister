@@ -1,5 +1,5 @@
 import multiprocessing as mp
-from old_train import run_geister_cqcnn_training_until_epsilon_2
+from train import run_geister_cqcnn_training_until_epsilon_2
 from geister_game import GeisterGame
 
 def train_config(cfg):
