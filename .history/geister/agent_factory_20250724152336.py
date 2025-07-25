@@ -1,7 +1,7 @@
 import json
 import torch
 import pennylane as qml
-from model_cqcnn import CNN_QNN_CNN_Geister
+from geister.model_cqcnn import CNN_QNN_CNN_Geister
 import os
 
 def save_agent(agent, dir_path: str, model_type: str = "CQCNN"):

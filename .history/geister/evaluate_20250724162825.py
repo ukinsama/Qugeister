@@ -2,7 +2,9 @@
 import torch.nn as nn
 import pennylane as qml
 from model_cqcnn import QNNComponent  # Assuming this is defined in qnn_component.py
-from geister_game import GeisterGame
+from geister.geister_game import BOARD_SIZE, GeisterGame # Assuming BOARD_SIZE is defined in geister_game.py
+# --- CNN Model (CCNN2_Geister) ---
+from geister.geister_game import GeisterGame
 from resource.old_train import Env_Geister, RandomPolicy
 import torch
 

@@ -1,0 +1,9 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geister"
+version = "0.1.0"
+description = "Quantum + CNN based game AI"
+authors = [{name = "Your Name"}]
