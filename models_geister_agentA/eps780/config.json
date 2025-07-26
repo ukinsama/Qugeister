@@ -7,7 +7,7 @@
   "feature_map_reps": 1,
   "ansatz_reps": 1,
   "input_channels_cnn": 6,
-  "board_size_cnn": 4,
+  "board_size_cnn": 6,
   "cnn_fc_out_features": 4,
-  "qnn_fc_out_features": 16
+  "qnn_fc_out_features": 36
 }
