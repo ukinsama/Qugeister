@@ -351,12 +351,12 @@ class Env_Geister:
             current_state_tensor = active_agent.check_state()
             possible_moves = active_agent.check_actions()
 
-            if not possible_moves:
-                self.game.winner = opponent_agent.player_id
-                self.game.win_reason = "no_moves"
-                self.game.game_over = True
-                print(f"Game ended: {self.game.winner} wins by no moves left.")
-                break
+if not possible_moves:
+    self.game.winner = opponent_agent.player_id
+    self.game.win_reason = "no_moves"
+    self.game.game_over = True
+    print(f"Game ended: {self.game.winner} wins by no moves left.")
+    break
 
             action = active_agent.action(possible_moves)
             if action is None:
@@ -377,10 +377,10 @@ class Env_Geister:
 
             reward_active = self.game.checkwinner_for_reward(active_agent.player_id)
             done_active = self.game.gameover()
-
+                # ここに追加
             if done_active:  # 勝者が決まった場合
                 self.game.game_over = True
-                print(f"Game ended: {self.game.winner} wins (Reason: {self.game.win_reason}).")
+                print(f"Game ended: {self.game.winner} wins.")
                 break
             next_state_tensor_for_active = active_agent.check_state()
 

@@ -150,6 +150,9 @@ class GeisterGame:
                 "bad_left": self.num_ghosts_per_player // 2
             }
         }
+
+        
+
     @staticmethod
     def get_piece_str(player_id, ghost_kind):
         return player_id + ghost_kind
@@ -185,7 +188,6 @@ class GeisterGame:
         self.setup_strategy_player_a.setup_pieces(self.board, self.PLAYER_A_ID, player_a_pieces, self.num_ghosts_per_player)
         player_b_pieces = [self.PLAYER_B_GOOD] * half + [self.PLAYER_B_BAD] * (self.num_ghosts_per_player - half)
         self.setup_strategy_player_b.setup_pieces(self.board, self.PLAYER_B_ID, player_b_pieces, self.num_ghosts_per_player)
-        
     def get_current_player(self):
         return self.current_player  
     def get_opponent_player(self):
@@ -332,19 +334,16 @@ class GeisterGame:
             captured_kind = self.get_kind_of_piece(captured_piece_str)
             if opponent_id == self.PLAYER_A_ID:
                 if captured_kind == self.GOOD_GHOST_A:
-                    self.player_stats[self.PLAYER_A_ID]["good_left"] -= 1
                     self.player_stats[self.current_player]["captured_good"] += 1
                 elif captured_kind == self.BAD_GHOST_A:
-                    self.player_stats[self.PLAYER_A_ID]["bad_left"] -= 1
                     self.player_stats[self.current_player]["captured_bad"] += 1
             else:
                 if captured_kind == self.GOOD_GHOST_B:
-                    self.player_stats[self.PLAYER_B_ID]["good_left"] -= 1
                     self.player_stats[self.current_player]["captured_good"] += 1
                 elif captured_kind == self.BAD_GHOST_B:
-                    self.player_stats[self.PLAYER_B_ID]["bad_left"] -= 1
                     self.player_stats[self.current_player]["captured_bad"] += 1
             self.player_stats[opponent_id]["pieces_left"] -= 1
+
         self.board.set_piece(to_r, to_c, moving_piece_str)
         self.board.remove_piece(from_r, from_c)
 
@@ -386,6 +385,7 @@ class GeisterGame:
             self.win_reason = "bad_captured"
             self.game_over = True
             return
+
 
     def checkwinner_for_reward(self, player_id):
         reward = 0.0

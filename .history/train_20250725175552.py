@@ -377,7 +377,7 @@ class Env_Geister:
 
             reward_active = self.game.checkwinner_for_reward(active_agent.player_id)
             done_active = self.game.gameover()
-
+                # ここに追加
             if done_active:  # 勝者が決まった場合
                 self.game.game_over = True
                 print(f"Game ended: {self.game.winner} wins (Reason: {self.game.win_reason}).")

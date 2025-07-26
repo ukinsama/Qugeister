@@ -132,24 +132,8 @@ class GeisterGame:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.board = Board(self.board_size, self.EMPTY)
         self.reset_board()
-        self.player_stats = {
-            self.PLAYER_A_ID: {
-                "pieces_left": self.num_ghosts_per_player,
-                "captured_good": 0,
-                "captured_bad": 0,
-                "escaped_good": 0,
-                "good_left": self.num_ghosts_per_player // 2,
-                "bad_left": self.num_ghosts_per_player // 2
-            },
-            self.PLAYER_B_ID: {
-                "pieces_left": self.num_ghosts_per_player,
-                "captured_good": 0,
-                "captured_bad": 0,
-                "escaped_good": 0,
-                "good_left": self.num_ghosts_per_player // 2,
-                "bad_left": self.num_ghosts_per_player // 2
-            }
-        }
+        
+
     @staticmethod
     def get_piece_str(player_id, ghost_kind):
         return player_id + ghost_kind
@@ -158,22 +142,8 @@ class GeisterGame:
         self.board.grid = [[self.EMPTY for _ in range(self.board_size)] for _ in range(self.board_size)]
         self.current_player = self.PLAYER_A_ID
         self.player_stats = {
-            self.PLAYER_A_ID: {
-                "pieces_left": self.num_ghosts_per_player,
-                "captured_good": 0,
-                "captured_bad": 0,
-                "escaped_good": 0,
-                "good_left": self.num_ghosts_per_player // 2,
-                "bad_left": self.num_ghosts_per_player // 2
-            },
-            self.PLAYER_B_ID: {
-                "pieces_left": self.num_ghosts_per_player,
-                "captured_good": 0,
-                "captured_bad": 0,
-                "escaped_good": 0,
-                "good_left": self.num_ghosts_per_player // 2,
-                "bad_left": self.num_ghosts_per_player // 2
-            }
+            self.PLAYER_A_ID: {"captured_good": 0, "captured_bad": 0, "escaped_good": 0, "pieces_left": self.num_ghosts_per_player},
+            self.PLAYER_B_ID: {"captured_good": 0, "captured_bad": 0, "escaped_good": 0, "pieces_left": self.num_ghosts_per_player},
         }
         self.game_over = False
         self.winner = None
@@ -185,44 +155,7 @@ class GeisterGame:
         self.setup_strategy_player_a.setup_pieces(self.board, self.PLAYER_A_ID, player_a_pieces, self.num_ghosts_per_player)
         player_b_pieces = [self.PLAYER_B_GOOD] * half + [self.PLAYER_B_BAD] * (self.num_ghosts_per_player - half)
         self.setup_strategy_player_b.setup_pieces(self.board, self.PLAYER_B_ID, player_b_pieces, self.num_ghosts_per_player)
-        
     def get_current_player(self):
-        return self.current_player  
-    def get_opponent_player(self):
-        return self.PLAYER_B_ID if self.current_player == self.PLAYER_A_ID else self.PLAYER_A_ID    
-    def get_player_stats(self, player_id):
-        if player_id not in self.player_stats:
-            raise ValueError(f"Invalid player ID: {player_id}")
-        return self.player_stats[player_id]
-    def get_board_size(self):
-        return self.board.size  
-    def get_num_ghosts_per_player(self):
-        return self.num_ghosts_per_player
-    def get_player_exits(self, player_id):
-        if player_id == self.PLAYER_A_ID:
-            return self.player_a_exits
-        elif player_id == self.PLAYER_B_ID:
-            return self.player_b_exits
-        else:
-            raise ValueError(f"Invalid player ID: {player_id}")
-    def get_piece_str_for_player(self, player_id, ghost_kind):
-        if player_id == self.PLAYER_A_ID:
-            return self.get_piece_str(self.PLAYER_A_ID, ghost_kind)
-        elif player_id == self.PLAYER_B_ID:
-            return self.get_piece_str(self.PLAYER_B_ID, ghost_kind)
-        else:
-            raise ValueError(f"Invalid player ID: {player_id}")
-    def get_all_piece_positions(self, player_id=None):
-        return self.board.get_all_piece_positions(player_id)
-    def get_piece_at(self, r, c):
-        return self.board.get_piece(r, c)
-    def set_piece_at(self, r, c, piece_str):
-        self.board.set_piece(r, c, piece_str)
-    def remove_piece_at(self, r, c):
-        return self.board.remove_piece(r, c)
-    def get_empty_symbol(self):
-        return self.EMPTY
-    
 
     def get_player_of_piece(self, piece_str):
         if piece_str == self.EMPTY:
@@ -234,41 +167,11 @@ class GeisterGame:
             return None
         return piece_str[1] if len(piece_str) > 1 else None
 
-    def _is_valid_target(self, r, c, moving_player_id, from_pos=None):
-        """
-        移動先のターゲットが有効かどうかを判定する。
-        出口マスからの2方向脱出口への移動を特例として許可する。
-        """
-        # 通常の盤内座標かどうか
-        if 0 <= r < self.board.size and 0 <= c < self.board.size:
-            # 盤内かつ、相手駒または空マスであれば有効
-            piece = self.board.get_piece(r, c)
-            if piece == self.EMPTY:
-                return True
-            # 自分の駒があるマスには移動不可
-            if self.get_player_of_piece(piece) == moving_player_id:
-                return False
-            return True  # 相手の駒があるマスには移動可能
-
-        # --- 盤外の場合は出口特例を確認 ---
-        if from_pos is None:
-            return False  # 出口判定には元の位置が必要
-
-        from_r, from_c = from_pos
-
-        if moving_player_id == self.PLAYER_A_ID:
-            if (from_r, from_c) == (0, 0) and (r, c) in [(-1, 0), (0, -1)]:
-                return True
-            if (from_r, from_c) == (0, 5) and (r, c) in [(-1, 5), (0, 6)]:
-                return True
-
-        elif moving_player_id == self.PLAYER_B_ID:
-            if (from_r, from_c) == (5, 0) and (r, c) in [(6, 0), (5, -1)]:
-                return True
-            if (from_r, from_c) == (5, 5) and (r, c) in [(6, 5), (5, 6)]:
-                return True
-
-        return False
+    def _is_valid_target(self, r, c, moving_player_id):
+        if not (0 <= r < self.board.size and 0 <= c < self.board.size): return False
+        target_piece = self.board.get_piece(r, c)
+        if target_piece != self.EMPTY and self.get_player_of_piece(target_piece) == moving_player_id: return False
+        return True
 
     def get_possible_actions(self, player_id=None):
         if player_id is None: player_id = self.current_player
@@ -288,104 +191,61 @@ class GeisterGame:
         from_r, from_c = from_pos
         to_r, to_c = to_pos
         moving_piece_str = self.board.get_piece(from_r, from_c)
-
         if moving_piece_str == self.EMPTY or self.get_player_of_piece(moving_piece_str) != self.current_player:
             return False
-
-        is_out_of_bounds = not (0 <= to_r < self.board.size and 0 <= to_c < self.board.size)
-
-        # --- 脱出判定 ---
-        if is_out_of_bounds:
-            if self.current_player == self.PLAYER_A_ID:
-                exits = [((0, 0), [(-1, 0), (0, -1)]), ((0, 5), [(-1, 5), (0, 6)])]
-                for corner, escape_moves in exits:
-                    if (from_r, from_c) == corner and (to_r, to_c) in escape_moves:
-                        if self.get_kind_of_piece(moving_piece_str) == self.GOOD_GHOST_A:
-                            self.player_stats[self.current_player]["escaped_good"] += 1
-                            self.winner = self.current_player
-                            self.win_reason = "escape"
-                            self.game_over = True
-                            print(f"Player A wins by GOOD ghost escape from {from_pos} to {to_pos}.")
-                            return True
-                        return False
-            elif self.current_player == self.PLAYER_B_ID:
-                exits = [((5, 0), [(6, 0), (5, -1)]), ((5, 5), [(6, 5), (5, 6)])]
-                for corner, escape_moves in exits:
-                    if (from_r, from_c) == corner and (to_r, to_c) in escape_moves:
-                        if self.get_kind_of_piece(moving_piece_str) == self.GOOD_GHOST_B:
-                            self.player_stats[self.current_player]["escaped_good"] += 1
-                            self.winner = self.current_player
-                            self.win_reason = "escape"
-                            self.game_over = True
-                            print(f"Player B wins by GOOD ghost escape from {from_pos} to {to_pos}.")
-                            return True
-                        return False
-            return False
-
-        # --- 通常盤内移動 ---
-        if not self._is_valid_target(to_r, to_c, self.current_player, from_pos=(from_r, from_c)):
+        if not self._is_valid_target(to_r, to_c, self.current_player):
             return False
 
         opponent_id = self.PLAYER_B_ID if self.current_player == self.PLAYER_A_ID else self.PLAYER_A_ID
         captured_piece_str = self.board.get_piece(to_r, to_c)
         if captured_piece_str != self.EMPTY and self.get_player_of_piece(captured_piece_str) == opponent_id:
             captured_kind = self.get_kind_of_piece(captured_piece_str)
-            if opponent_id == self.PLAYER_A_ID:
-                if captured_kind == self.GOOD_GHOST_A:
-                    self.player_stats[self.PLAYER_A_ID]["good_left"] -= 1
-                    self.player_stats[self.current_player]["captured_good"] += 1
-                elif captured_kind == self.BAD_GHOST_A:
-                    self.player_stats[self.PLAYER_A_ID]["bad_left"] -= 1
-                    self.player_stats[self.current_player]["captured_bad"] += 1
-            else:
-                if captured_kind == self.GOOD_GHOST_B:
-                    self.player_stats[self.PLAYER_B_ID]["good_left"] -= 1
-                    self.player_stats[self.current_player]["captured_good"] += 1
-                elif captured_kind == self.BAD_GHOST_B:
-                    self.player_stats[self.PLAYER_B_ID]["bad_left"] -= 1
-                    self.player_stats[self.current_player]["captured_bad"] += 1
+            if captured_kind == self.GOOD_GHOST:
+                self.player_stats[self.current_player]["captured_good"] += 1
+            elif captured_kind == self.BAD_GHOST:
+                self.player_stats[self.current_player]["captured_bad"] += 1
             self.player_stats[opponent_id]["pieces_left"] -= 1
+
         self.board.set_piece(to_r, to_c, moving_piece_str)
         self.board.remove_piece(from_r, from_c)
+
+        if self.get_kind_of_piece(moving_piece_str) == self.GOOD_GHOST and (to_r, to_c) in (self.player_a_exits if self.current_player == self.PLAYER_A_ID else self.player_b_exits):
+            self.player_stats[self.current_player]["escaped_good"] += 1
+            self.board.remove_piece(to_r, to_c)
+            self.player_stats[self.current_player]["pieces_left"] -= 1
 
         self.check_win_condition()
         if not self.game_over:
             self.switch_player()
-        else:
-            print(f"Game ended: {self.winner} wins by {self.win_reason}.")
         return True
-
+        
     def switch_player(self):
         self.current_player = self.PLAYER_B_ID if self.current_player == self.PLAYER_A_ID else self.PLAYER_A_ID
 
     def check_win_condition(self):
-        # Player A の GOODゴースト全滅
-        if self.player_stats[self.PLAYER_A_ID]["good_left"] == 0:
-            self.winner = self.PLAYER_B_ID
-            self.win_reason = "good_captured"
-            self.game_over = True
-            return
+        stats_a = self.player_stats[self.PLAYER_A_ID]
+        stats_b = self.player_stats[self.PLAYER_B_ID]
+        win_threshold = self.num_ghosts_per_player // 2  # 動的閾値
 
-        # Player B の GOODゴースト全滅
-        if self.player_stats[self.PLAYER_B_ID]["good_left"] == 0:
+        if stats_a["captured_good"] >= win_threshold:
+            self.game_over = True
             self.winner = self.PLAYER_A_ID
-            self.win_reason = "good_captured"
+        elif stats_b["captured_good"] >= win_threshold:
             self.game_over = True
-            return
-
-        # Player A の BADゴースト全滅
-        if self.player_stats[self.PLAYER_A_ID]["bad_left"] == 0:
             self.winner = self.PLAYER_B_ID
-            self.win_reason = "bad_captured"
+        elif stats_a["captured_bad"] >= win_threshold:
             self.game_over = True
-            return
-
-        # Player B の BADゴースト全滅
-        if self.player_stats[self.PLAYER_B_ID]["bad_left"] == 0:
+            self.winner = self.PLAYER_B_ID
+        elif stats_b["captured_bad"] >= win_threshold:
+            self.game_over = True
             self.winner = self.PLAYER_A_ID
-            self.win_reason = "bad_captured"
+        elif stats_a["escaped_good"] >= 1:
             self.game_over = True
-            return
+            self.winner = self.PLAYER_A_ID
+        elif stats_b["escaped_good"] >= 1:
+            self.game_over = True
+            self.winner = self.PLAYER_B_ID
+
 
     def checkwinner_for_reward(self, player_id):
         reward = 0.0
@@ -395,17 +255,8 @@ class GeisterGame:
         bad_diff = self.player_stats[player_id]["captured_bad"] - self.player_stats[opponent_id]["captured_bad"]
         reward += 0.05 * good_diff
         reward -= 0.05 * bad_diff
-        if player_id == self.PLAYER_A_ID:
-            good_symbol = self.GOOD_GHOST_A
-        else:
-            good_symbol = self.GOOD_GHOST_B
 
-        good_positions = [
-            (pos, piece) 
-            for pos, piece in self.board.get_all_piece_positions(player_id) 
-            if self.get_kind_of_piece(piece) == good_symbol
-        ]
-
+        good_positions = [(pos, piece) for pos, piece in self.board.get_all_piece_positions(player_id) if self.get_kind_of_piece(piece) == self.GOOD_GHOST]
         if good_positions:
             my_exits = self.player_a_exits if player_id == self.PLAYER_A_ID else self.player_b_exits
             min_distance = min(
@@ -424,6 +275,7 @@ class GeisterGame:
 
         return reward
 
+        
     def gameover(self): # For OX game's Env compatibility
         return self.game_over
 
@@ -446,16 +298,10 @@ class GeisterGame:
                     kind = self.get_kind_of_piece(piece)
                     if owner == player_id_perspective:
                         state[3, r, c] = 1.0
-                        if owner == self.PLAYER_A_ID:
-                            if kind == self.GOOD_GHOST_A:
-                                state[0, r, c] = 1.0
-                            elif kind == self.BAD_GHOST_A:
-                                state[1, r, c] = 1.0
-                        else:  # B側
-                            if kind == self.GOOD_GHOST_B:
-                                state[0, r, c] = 1.0
-                            elif kind == self.BAD_GHOST_B:
-                                state[1, r, c] = 1.0
+                        if kind == self.GOOD_GHOST:
+                            state[0, r, c] = 1.0
+                        elif kind == self.BAD_GHOST:
+                            state[1, r, c] = 1.0
                     elif owner == opponent_id:
                         state[2, r, c] = 1.0
                 if (r, c) in my_exits:
