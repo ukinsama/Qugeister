@@ -1,0 +1,87 @@
+{
+  "model_name": "my_qnn_estimator",
+  "description": "QNN Color Estimator from HNN Composer",
+  "network": {
+    "nodes": [
+      {
+        "id": "input-ch0",
+        "type": "input",
+        "data": {
+          "label": "Ch0: Own Good (64)",
+          "in_features": 64,
+          "channel_index": 0
+        }
+      },
+      {
+        "id": "input-ch1",
+        "type": "input",
+        "data": {
+          "label": "Ch1: Own Bad (64)",
+          "in_features": 64,
+          "channel_index": 1
+        }
+      },
+      {
+        "id": "merge",
+        "type": "merge",
+        "data": {
+          "label": "MERGE (concat)",
+          "merge_type": "concat"
+        }
+      },
+      {
+        "id": "dense",
+        "type": "dense",
+        "data": {
+          "label": "DENSE (4)",
+          "out_features": 4
+        }
+      },
+      {
+        "id": "quantum",
+        "type": "quantum",
+        "data": {
+          "label": "QUANTUM (4q, embedding:AngleEmbedding, ansatz:BasicEntanglerLayers)",
+          "n_qubits": 4,
+          "preset": "angle",
+          "qCircuit": {
+            "shots": 1024,
+            "resultMode": "expval",
+            "gates": [],
+            "embeddingTemplateName": "AngleEmbedding",
+            "ansatzTemplateName": "BasicEntanglerLayers"
+          }
+        }
+      },
+      {
+        "id": "dense2",
+        "type": "dense",
+        "data": {
+          "label": "DENSE (16)",
+          "out_features": 16
+        }
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "data": {
+          "label": "OUTPUT (16)",
+          "out_features": 16
+        }
+      }
+    ],
+    "edges": [
+      { "id": "e1", "source": "input-ch0", "target": "merge" },
+      { "id": "e2", "source": "input-ch1", "target": "merge" },
+      { "id": "e3", "source": "merge", "target": "dense" },
+      { "id": "e4", "source": "dense", "target": "quantum" },
+      { "id": "e5", "source": "quantum", "target": "dense2" },
+      { "id": "e6", "source": "dense2", "target": "output" }
+    ]
+  },
+  "training": {
+    "epochs": 50,
+    "batch_size": 32,
+    "learning_rate": 0.001
+  }
+}
