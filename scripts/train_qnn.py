@@ -70,7 +70,7 @@ def convert_to_quaic_format(state_dict: dict, use_hnn_model: bool = False) -> di
 
     QuAic expects (ExplicitColorEstimationQNN):
     - preprocessing.* (448D -> n_qubits)
-    - quantum_layer.quantum_layer.weights [n_layers, n_qubits, 2]
+    - quantum_layer.weights [n_layers, n_qubits, 2]
     - color_head.* (n_qubits -> 16)
     - gating_head.* (optional, not used)
 
@@ -78,10 +78,11 @@ def convert_to_quaic_format(state_dict: dict, use_hnn_model: bool = False) -> di
     - preprocessing.* (same)
     - quantum_layer.weights [n_layers, n_qubits, 2]
     - color_head.* (same)
+    -> 変換不要（同じ構造）
 
     Qugeister HNNColorEstimator has:
     - pre_layers.* -> preprocessing.*
-    - quantum_layer.weights -> quantum_layer.quantum_layer.weights
+    - quantum_layer.weights (same)
     - post_layers.* -> color_head.*
     """
     quaic_state = {}
@@ -107,14 +108,8 @@ def convert_to_quaic_format(state_dict: dict, use_hnn_model: bool = False) -> di
             quaic_state[new_key] = value
             continue
 
-        # Quantum layer: weights -> quantum_layer.quantum_layer.weights
-        # QuAic uses TorchLayer which creates nested structure
-        # Shape remains [n_layers, n_qubits, 2] (no expansion needed)
-        if key == 'quantum_layer.weights':
-            quaic_state['quantum_layer.quantum_layer.weights'] = value
-            continue
-
-        # Keep other keys as-is
+        # quantum_layer.weights は変換不要（QuAicも同じ構造）
+        # Keep all other keys as-is (including quantum_layer.weights)
         quaic_state[key] = value
 
     return quaic_state
