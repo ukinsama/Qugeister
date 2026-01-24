@@ -103,7 +103,14 @@ def load_hnn_config(config_path: str) -> HNNConfig:
         # Direct format
         input_data = data.get('input', {})
         output_data = data.get('output', {})
-        arch_data = data.get('architecture', {})
+
+        # Check for network with nodes/edges at top level (HNN Composer export format)
+        if 'network' in data and 'nodes' in data['network']:
+            # HNN Composer graph format at top level
+            arch_data = _extract_architecture_from_graph(data['network'])
+        else:
+            # Traditional architecture dict format
+            arch_data = data.get('architecture', {})
 
     # Parse quantum config
     q_data = arch_data.get('quantum', {})
