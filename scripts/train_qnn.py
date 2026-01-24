@@ -68,19 +68,20 @@ from src.qugeister.models.hnn_config_loader import (
 def convert_to_quaic_format(state_dict: dict, use_hnn_model: bool = False) -> dict:
     """Convert model state_dict to QuAic internal format.
 
-    QuAic expects:
+    QuAic expects (ExplicitColorEstimationQNN):
     - preprocessing.* (448D -> n_qubits)
-    - quantum_layer.quantum_weights [n_layers, n_qubits, 3]
+    - quantum_layer.quantum_layer.weights [n_layers, n_qubits, 2]
     - color_head.* (n_qubits -> 16)
+    - gating_head.* (optional, not used)
 
-    ExplicitColorEstimationQNN has:
+    Qugeister ExplicitColorEstimationQNN has:
     - preprocessing.* (same)
-    - quantum_layer.weights [n_layers, n_qubits, 2] (RY+RZ only)
+    - quantum_layer.weights [n_layers, n_qubits, 2]
     - color_head.* (same)
 
-    HNNColorEstimator has:
+    Qugeister HNNColorEstimator has:
     - pre_layers.* -> preprocessing.*
-    - quantum_layer.weights -> quantum_layer.quantum_weights
+    - quantum_layer.weights -> quantum_layer.quantum_layer.weights
     - post_layers.* -> color_head.*
     """
     quaic_state = {}
@@ -90,7 +91,7 @@ def convert_to_quaic_format(state_dict: dict, use_hnn_model: bool = False) -> di
         if key == '_device_tracker':
             continue
 
-        # Skip gating_head (not needed for QuAic)
+        # Skip gating_head (not needed for QuAic competition)
         if key.startswith('gating_head.'):
             continue
 
@@ -106,13 +107,11 @@ def convert_to_quaic_format(state_dict: dict, use_hnn_model: bool = False) -> di
             quaic_state[new_key] = value
             continue
 
-        # Quantum layer: weights -> quantum_weights, expand [n_layers, n_qubits, 2] -> [n_layers, n_qubits, 3]
+        # Quantum layer: weights -> quantum_layer.quantum_layer.weights
+        # QuAic uses TorchLayer which creates nested structure
+        # Shape remains [n_layers, n_qubits, 2] (no expansion needed)
         if key == 'quantum_layer.weights':
-            n_layers, n_qubits, _ = value.shape
-            expanded = torch.zeros(n_layers, n_qubits, 3, dtype=value.dtype)
-            # Original: [RY, RZ] -> QuAic: [RX, RY, RZ]
-            expanded[:, :, 1:] = value  # RY, RZ in positions 1, 2
-            quaic_state['quantum_layer.quantum_weights'] = expanded
+            quaic_state['quantum_layer.quantum_layer.weights'] = value
             continue
 
         # Keep other keys as-is
