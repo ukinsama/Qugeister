@@ -63,6 +63,12 @@ from src.qugeister.models.hnn_config_loader import (
     HNNColorEstimator,
     QuantumConfig,
 )
+from src.qugeister.models.dag_hnn_model import (
+    build_dag_model_from_config,
+    is_dag_config,
+    extract_quantum_params_from_dag_config,
+    load_dag_config,
+)
 
 
 def convert_to_quaic_format(state_dict: dict, use_hnn_model: bool = False) -> dict:
@@ -264,6 +270,8 @@ def train_qnn_optimized(
     train_indices=None,
     val_indices=None,
     use_hnn_model=False,
+    use_dag_model=False,
+    dag_config=None,
 ):
     """Train QNN with optimizations (GPU, AMP, DataLoader)"""
     training_start_time = time.time()
@@ -461,20 +469,28 @@ def train_qnn_optimized(
             patience_counter = 0
             best_model_state = {k: v.cpu() for k, v in qnn_model.state_dict().items()}
             best_checkpoint_path = save_path / 'best_model_checkpoint.pth'
-            if use_hnn_model:
+            # DAGモデルはconfigから抽出、HNNはconfig属性、legacyは直接属性
+            if use_dag_model and dag_config:
+                q_params = extract_quantum_params_from_dag_config(dag_config)
+                n_qubits = q_params['n_qubits']
+                n_layers = q_params['n_layers']
+            elif use_hnn_model:
                 n_qubits = qnn_model.config.quantum.n_qubits
                 n_layers = qnn_model.config.quantum.n_layers
             else:
                 n_qubits = qnn_model.n_qubits
                 n_layers = qnn_model.n_layers
-            torch.save({
+            checkpoint_data = {
                 'model_state_dict': best_model_state,
                 'epoch': epoch,
                 'val_loss': val_loss,
                 'val_acc': val_acc,
                 'n_qubits': n_qubits,
-                'n_layers': n_layers
-            }, best_checkpoint_path)
+                'n_layers': n_layers,
+            }
+            if use_dag_model and dag_config:
+                checkpoint_data['config'] = dag_config
+            torch.save(checkpoint_data, best_checkpoint_path)
             print(f"  -> 改善! Val Loss: {val_loss:.4f} (保存済み)")
         else:
             patience_counter += 1
@@ -567,24 +583,41 @@ def main():
         args.device = 'cpu'
         args.no_amp = True
 
-    # Load HNN config
+    # Load config (DAG v2.0 or v1.0 を自動判定)
     hnn_config = None
+    dag_config_dict = None
+    use_dag_model = False
+
     if args.config:
-        print(f"HNN設定を読み込み: {args.config}")
-        hnn_config = load_hnn_config(args.config)
-        args.n_qubits = hnn_config.quantum.n_qubits
-        args.n_layers = hnn_config.quantum.n_layers
-        # Override training params from config
-        if args.lr == 0.001:
-            args.lr = hnn_config.training.get('learning_rate',
-                      hnn_config.training.get('recommended_lr', 0.001))
-        if args.batch_size == 256:
-            args.batch_size = hnn_config.training.get('batch_size',
-                              hnn_config.training.get('recommended_batch_size', 256))
-        if args.epochs == 100:
-            args.epochs = hnn_config.training.get('epochs',
-                          hnn_config.training.get('recommended_epochs', 100))
-        print(f"  量子ビット: {args.n_qubits}, レイヤー: {args.n_layers}")
+        print(f"設定を読み込み: {args.config}")
+        raw_config = load_dag_config(args.config)
+
+        if is_dag_config(raw_config):
+            # DAG形式（v2.0 + edges）: DAGHNNModelで学習
+            dag_config_dict = raw_config
+            use_dag_model = True
+            q_params = extract_quantum_params_from_dag_config(raw_config)
+            args.n_qubits = q_params['n_qubits']
+            args.n_layers = q_params['n_layers']
+            print(f"  DAG config (v2.0) を検出")
+            print(f"  量子ビット: {args.n_qubits}, レイヤー: {args.n_layers}")
+        else:
+            # v1.0形式: 既存のHNNColorEstimatorで学習
+            hnn_config = load_hnn_config(args.config)
+            args.n_qubits = hnn_config.quantum.n_qubits
+            args.n_layers = hnn_config.quantum.n_layers
+            # Override training params from config
+            if args.lr == 0.001:
+                args.lr = hnn_config.training.get('learning_rate',
+                          hnn_config.training.get('recommended_lr', 0.001))
+            if args.batch_size == 256:
+                args.batch_size = hnn_config.training.get('batch_size',
+                                  hnn_config.training.get('recommended_batch_size', 256))
+            if args.epochs == 100:
+                args.epochs = hnn_config.training.get('epochs',
+                              hnn_config.training.get('recommended_epochs', 100))
+            print(f"  v1.0 config を検出")
+            print(f"  量子ビット: {args.n_qubits}, レイヤー: {args.n_layers}")
 
     # Setup save directory
     if args.save_dir:
@@ -598,7 +631,8 @@ def main():
     print("QNN色推定モデル学習 (最適化版)")
     print("=" * 70)
     if args.config:
-        print(f"設定ファイル: {args.config}")
+        config_type = "DAG v2.0" if use_dag_model else "v1.0"
+        print(f"設定ファイル: {args.config} ({config_type})")
     print(f"モデル: {args.n_qubits}q x {args.n_layers}L ({args.backend})")
     print(f"デバイス: {args.device.upper()}")
     print(f"バッチサイズ: {args.batch_size}")
@@ -652,10 +686,24 @@ def main():
         persistent_workers=(args.num_workers > 0)
     )
 
-    # Create model
+    # Create model (3分岐: DAG / HNN v1.0 / legacy)
     use_hnn_model = hnn_config is not None
     print(f"\nモデルを作成中 (qubits={args.n_qubits}, layers={args.n_layers})...")
-    if use_hnn_model:
+
+    if use_dag_model:
+        # DAG形式（v2.0 + edges）: DAGHNNModelで構築
+        if args.backend == 'backprop':
+            q_device = 'default.qubit.backprop'
+        else:
+            q_device = 'auto'
+        print(f"  DAGHNNModel (v2.0 DAG config)")
+        qnn_model = build_dag_model_from_config(
+            dag_config_dict,
+            state_dict=None,
+            device=args.device,
+            quantum_device=q_device,
+        )
+    elif use_hnn_model:
         print(f"  HNNColorEstimator (QuAic互換)")
         qnn_model = build_model_from_config(args.config, device=args.device, backend=args.backend)
     else:
@@ -684,18 +732,36 @@ def main():
         train_indices=train_indices,
         val_indices=val_indices,
         use_hnn_model=use_hnn_model,
+        use_dag_model=use_dag_model,
+        dag_config=dag_config_dict,
     )
 
     # Save model
     model_path = save_dir / 'qnn_color_model.pth'
-    torch.save(qnn_model.state_dict(), model_path)
-    print(f"\nモデルを保存: {model_path}")
+    if use_dag_model and dag_config_dict:
+        # DAGモデル: v2.0形式（state_dict + config）で保存
+        torch.save({
+            'state_dict': qnn_model.state_dict(),
+            'config': dag_config_dict,
+        }, model_path)
+        print(f"\nDAGモデル (v2.0) を保存: {model_path}")
+    else:
+        torch.save(qnn_model.state_dict(), model_path)
+        print(f"\nモデルを保存: {model_path}")
 
     # Save QuAic-compatible weights
     weights_path = save_dir / 'weights.pth'
-    quaic_state_dict = convert_to_quaic_format(qnn_model.state_dict(), use_hnn_model)
-    torch.save(quaic_state_dict, weights_path)
-    print(f"QuAic用重みを保存: {weights_path}")
+    if use_dag_model and dag_config_dict:
+        # DAGモデル: v2.0形式でそのまま保存
+        torch.save({
+            'state_dict': qnn_model.state_dict(),
+            'config': dag_config_dict,
+        }, weights_path)
+        print(f"DAG weights (v2.0) を保存: {weights_path}")
+    else:
+        quaic_state_dict = convert_to_quaic_format(qnn_model.state_dict(), use_hnn_model)
+        torch.save(quaic_state_dict, weights_path)
+        print(f"QuAic用重みを保存: {weights_path}")
 
     # Save history
     history_path = save_dir / 'training_history.json'
