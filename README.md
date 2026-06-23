@@ -22,7 +22,7 @@ QuAic に提出
 
 ### Google Colabで学習（推奨）
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/quaic/Qugeister/blob/main/notebooks/geister_qnn_training.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ukinsama/Qugeister/blob/main/notebooks/geister_qnn_training.ipynb)
 
 1. 上のバッジをクリックしてColabを開く
 2. QuAicからエクスポートした`config.json`をアップロード
@@ -33,7 +33,7 @@ QuAic に提出
 
 ```bash
 # リポジトリをクローン
-git clone https://github.com/quaic/Qugeister.git
+git clone https://github.com/ukinsama/Qugeister.git
 cd Qugeister
 
 # 依存関係をインストール
