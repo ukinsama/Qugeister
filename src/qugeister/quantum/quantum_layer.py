@@ -26,9 +26,13 @@ class QuantumLayer(nn.Module):
     Compatible with PyTorch's autograd system.
 
     Architecture:
-        Input [batch, n_qubits]
+        Input [batch, input_dim]
         -> Quantum Circuit (embedding + variational layers)
         -> Output [batch, n_qubits] (expectation values)
+
+    Input dimension depends on embedding type:
+        - 'angle': input_dim = n_qubits (each value -> RY rotation)
+        - 'amplitude': input_dim = 2^n_qubits (vector -> quantum state amplitudes)
 
     Args:
         n_qubits: Number of qubits (default: 4)
@@ -68,6 +72,8 @@ class QuantumLayer(nn.Module):
         self.n_layers = n_layers
         self.embedding = embedding
         self.entanglement = entanglement
+        # 入力次元: angleはn_qubits、amplitudeは2^n_qubits（状態ベクトルの振幅数）
+        self.input_dim = (2 ** n_qubits) if embedding == 'amplitude' else n_qubits
 
         # Handle special 'default.qubit.backprop' mode for fastest training
         self._force_backprop = False
@@ -111,12 +117,13 @@ class QuantumLayer(nn.Module):
             Returns:
                 Tuple of expectation values (each [batch] or scalar)
             """
-            # Embedding layer - use [..., i] for batch compatibility
-            for i in range(n_qubits):
-                if embedding == 'angle':
+            # Embedding layer
+            if embedding == 'angle':
+                # use [..., i] for batch compatibility
+                for i in range(n_qubits):
                     qml.RY(inputs[..., i], wires=i)
-                elif embedding == 'amplitude':
-                    qml.RX(inputs[..., i], wires=i)
+            elif embedding == 'amplitude':
+                qml.AmplitudeEmbedding(inputs, wires=range(n_qubits), normalize=True)
 
             # Variational layers
             for layer_idx in range(n_layers):
@@ -209,7 +216,9 @@ class QuantumLayer(nn.Module):
         No sequential loop - entire batch processed in one circuit execution.
 
         Args:
-            x: Input tensor [batch, n_qubits] or [n_qubits]
+            x: Input tensor [batch, input_dim] or [input_dim]
+               angle embedding: input_dim = n_qubits
+               amplitude embedding: input_dim = 2^n_qubits
 
         Returns:
             Output tensor [batch, n_qubits] or [n_qubits]
@@ -221,10 +230,11 @@ class QuantumLayer(nn.Module):
             x = x.unsqueeze(0)
 
         # Verify input shape
-        if x.shape[-1] != self.n_qubits:
+        if x.shape[-1] != self.input_dim:
             raise ValueError(
-                f"Expected input shape [..., {self.n_qubits}], got {x.shape}. "
-                f"Last dimension must match n_qubits={self.n_qubits}"
+                f"Expected input shape [..., {self.input_dim}], got {x.shape}. "
+                f"Last dimension must match input_dim={self.input_dim} "
+                f"(embedding='{self.embedding}', n_qubits={self.n_qubits})"
             )
 
         # Execute quantum circuit with parameter broadcasting
